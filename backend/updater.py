@@ -13,13 +13,15 @@ from typing import Optional
 
 DEFAULT_REPOSITORY = "https://github.com/bleu37-sudo/Lampyre"
 DEFAULT_ASSET = "lampyre.zip"
+DEFAULT_BRANCH = "main"
 
 
 class Updater:
-    def __init__(self, app_root: str, repository: str = DEFAULT_REPOSITORY, asset_name: str = DEFAULT_ASSET):
+    def __init__(self, app_root: str, repository: str = DEFAULT_REPOSITORY, asset_name: str = DEFAULT_ASSET, branch: str = DEFAULT_BRANCH):
         self.app_root = Path(app_root).resolve()
         self.repository = repository.rstrip("/")
         self.asset_name = asset_name
+        self.branch = branch
         self.owner, self.repo = self._parse_repository(repository)
         self.lock = threading.Lock()
         self.downloading = False
@@ -65,11 +67,21 @@ class Updater:
             self.last_error = ""
             self.downloading = False
         try:
+            version_url = (
+                f"https://raw.githubusercontent.com/"
+                f"{self.owner}/{self.repo}/{self.branch}/VERSION"
+            )
+            with self._urlopen(version_url) as response:
+                latest = self._normalize_version(
+                    response.read().decode("utf-8")
+                )
+            if not latest:
+                raise RuntimeError("Le fichier VERSION distant est vide.")
+
             api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/releases/latest"
             with self._urlopen(api_url) as response:
                 release = json.load(response)
 
-            latest = self._normalize_version(str(release.get("tag_name") or release.get("name") or ""))
             download_url = ""
             for asset in release.get("assets") or []:
                 if asset.get("name") == self.asset_name:
@@ -80,7 +92,7 @@ class Updater:
             if not download_url:
                 raise RuntimeError("Aucune archive téléchargeable dans la dernière release.")
 
-            current = self.current_version()
+            current = self._normalize_version(self.current_version())
             update_available = latest != current and bool(latest)
             with self.lock:
                 self.latest_version = latest
