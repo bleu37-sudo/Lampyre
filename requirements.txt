@@ -1,0 +1,12 @@
+diffusers>=0.42.0
+transformers>=5.0.0
+accelerate>=1.0.0
+huggingface_hub>=0.28.0
+sentencepiece
+protobuf
+safetensors
+fastapi
+uvicorn
+pillow
+numpy
+

@@ -1,0 +1,2555 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lampyre — Retouche Photo IA</title>
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <style>
+    :root {
+      --bg: #0f1014;
+      --surface: #181a20;
+      --surface-2: #22252e;
+      --border: #2e323f;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --ok: #34d399;
+      --warn: #fbbf24;
+    }
+
+    * { box-sizing: border-box; user-select: none; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      height: 58px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .mask-toolbar {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      z-index: 26;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      padding: 8px;
+      background: rgba(24, 26, 32, 0.94);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(6px);
+    }
+    .mask-tools-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mask-toolbar .tool-btn {
+      min-width: 39px;
+      justify-content: center;
+      padding: 6px 9px;
+    }
+    .mask-toolbar .tool-btn svg,
+    .mask-toolbar .icon-btn svg {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+    }
+    .mask-toolbar .icon-btn {
+      padding: 6px 8px;
+      justify-content: center;
+    }
+    .mask-toolbar .tool-group {
+      padding: 4px 8px;
+      gap: 7px;
+      font-size: 0.78rem;
+    }
+    .mask-toolbar .tool-group input[type="range"] { width: 92px; }
+    .mask-toolbar .tool-group.mask-hue input[type="range"] { width: 72px; }
+
+    .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 1.08rem; }
+    .brand-logo { width: 42px; height: 42px; object-fit: contain; flex: 0 0 auto; }
+
+    .telemetry-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      font-size: 0.76rem;
+      color: var(--text);
+      background: var(--surface-2);
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .badge.ok { border-color: rgba(52, 211, 153, 0.4); color: var(--ok); }
+    .badge.warn { border-color: rgba(251, 191, 36, 0.4); color: var(--warn); }
+
+    .header-actions { display: flex; gap: 8px; }
+
+    button, a.btn-link {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #versionsToggleBtn {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    button:hover:not(:disabled), a.btn-link:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary, a.btn-link.secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    button.secondary:hover:not(:disabled), a.btn-link.secondary:hover { background: #2c303c; }
+    button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .content-shell { flex: 1; display: flex; overflow: hidden; position: relative; }
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .settings-drawer {
+      display: none;
+      width: 340px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      padding: 16px;
+      overflow-y: auto;
+      user-select: text;
+    }
+    .settings-drawer.open { display: block; }
+
+    .drawer-title {
+      font-size: 0.96rem;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 12px;
+      margin-bottom: 12px;
+      font-size: 0.82rem;
+    }
+    .panel-box h4 {
+      margin: 0 0 8px 0;
+      font-size: 0.82rem;
+      color: #c7d2fe;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .kv-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; line-height: 1.35; }
+    .kv-label { color: var(--muted); }
+    .kv-val { font-weight: 600; text-align: right; }
+
+    .vram-bar-bg {
+      height: 8px;
+      background: #0d0f14;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 7px 0 4px 0;
+      border: 1px solid var(--border);
+    }
+    .vram-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #34d399, #6366f1);
+      transition: width 0.35s ease;
+    }
+
+    .comp-list {
+      margin-top: 6px;
+      border-top: 1px solid var(--border);
+      padding-top: 6px;
+      font-size: 0.76rem;
+      color: #d1d5db;
+    }
+    .comp-item { display: flex; justify-content: space-between; padding: 2px 0; }
+
+    .field-group { margin-bottom: 11px; font-size: 0.82rem; }
+    .field-group label { display: block; color: #d1d5db; margin-bottom: 4px; font-weight: 600; }
+
+    select, input[type="number"], input[type="text"], input[type="password"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 0.86rem;
+      outline: none;
+    }
+    .settings-drawer select, .settings-drawer input[type="number"] { width: 100%; }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    .drawer-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+
+    .drop-box {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 56px 40px;
+      text-align: center;
+      max-width: 520px;
+      cursor: pointer;
+      background: rgba(24, 26, 32, 0.65);
+    }
+    .drop-box:hover, .drop-box.dragover {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .workspace { display: none; width: 100%; height: 100%; align-items: center; justify-content: center; position: relative; overflow: auto; }
+    .workspace.panning,
+    .workspace.panning #maskCanvas { cursor: grabbing; }
+    .workspace.panning { user-select: none; }
+    .canvas-stage {
+      position: relative;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #111;
+      transform-origin: center center;
+      flex-shrink: 0;
+    }
+    canvas { display: block; max-width: 78vw; max-height: calc(100vh - 190px); }
+    .workspace.zoomed canvas { max-width: none; max-height: none; }
+    .workspace.zoomed {
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+    .workspace.zoomed .canvas-stage { margin: auto; }
+    #maskCanvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.65; cursor: none; }
+    #maskCanvas.compare-mode { cursor: default; }
+
+    #brushCursor {
+      display: none;
+      position: fixed;
+      pointer-events: none;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.92);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+      transform: translate(-50%, -50%);
+      z-index: 60;
+    }
+    #brushCursor.eraser {
+      border-style: dashed;
+      border-color: #fbbf24;
+    }
+
+    .zoom-bar {
+      display: none;
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      background: rgba(24, 26, 32, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px 6px;
+      align-items: center;
+      gap: 4px;
+      z-index: 25;
+      backdrop-filter: blur(6px);
+    }
+    .zoom-bar button { padding: 4px 8px; font-size: 0.78rem; }
+    .zoom-label { font-size: 0.78rem; color: var(--muted); min-width: 44px; text-align: center; }
+
+    /* Panneau latéral gauche des versions */
+    .versions-panel {
+      display: none;
+      width: 248px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .versions-panel.open { display: flex; }
+    .versions-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+    .versions-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .version-card {
+      background: var(--surface-2);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.12s ease;
+    }
+    .version-card:hover { border-color: #4f556b; }
+    .version-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+    }
+    .version-thumb-wrap {
+      position: relative;
+      height: 112px;
+      background: #0d0e12;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .version-thumb-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .version-tag {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      background: rgba(15, 16, 20, 0.86);
+      color: #e5e7eb;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .version-card.active .version-tag {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .version-meta {
+      padding: 8px 9px;
+      font-size: 0.76rem;
+    }
+    .version-prompt {
+      color: var(--text);
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .version-sub {
+      color: var(--muted);
+      font-size: 0.71rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+    .version-actions {
+      display: flex;
+      gap: 5px;
+      margin-top: 7px;
+    }
+    .version-actions button {
+      flex: 1;
+      padding: 4px 6px;
+      font-size: 0.73rem;
+      justify-content: center;
+    }
+    .version-actions button.danger:hover:not(:disabled) {
+      background: #991b1b;
+      border-color: #b91c1c;
+      color: #fff;
+    }
+
+    /* Overlay bloquant pendant un traitement IA */
+    #processingOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 11, 16, 0.78);
+      backdrop-filter: blur(6px);
+      z-index: 95;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      cursor: wait;
+    }
+    #processingOverlay.active { display: flex; }
+    .proc-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 26px 28px;
+      max-width: 560px;
+      width: 100%;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.75);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .proc-card h3 { margin: 0; font-size: 1.1rem; }
+    .proc-timer {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 0.92rem;
+      color: #a5b4fc;
+      background: rgba(99, 102, 241, 0.14);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      padding: 4px 12px;
+      border-radius: 999px;
+    }
+    .proc-hint { color: var(--muted); font-size: 0.84rem; margin: 0; }
+    .proc-log {
+      width: 100%;
+      max-height: 110px;
+      overflow-y: auto;
+      background: #090a0d;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 0.75rem;
+      color: #cbd5e1;
+      text-align: left;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+
+    .export-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px 2px 2px 6px;
+    }
+    .export-group select {
+      background: transparent;
+      border: none;
+      padding: 4px 4px;
+      font-size: 0.8rem;
+      color: var(--text);
+    }
+
+    #toastContainer {
+      position: fixed;
+      bottom: 72px;
+      right: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 120;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.84rem;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+      max-width: 360px;
+    }
+    .toast.ok { border-left-color: var(--ok); }
+    .toast.err { border-left-color: #f87171; }
+
+    /* Popup Aide Prompt (extraction zone masquée) */
+    #promptHelperModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 11, 16, 0.72);
+      backdrop-filter: blur(5px);
+      z-index: 80;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #promptHelperModal.open { display: flex; }
+    #updateModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 11, 16, 0.72);
+      backdrop-filter: blur(5px);
+      z-index: 95;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #updateModal.open { display: flex; }
+    .update-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 520px;
+      padding: 20px 22px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.75);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .update-card h3 { margin: 0; }
+    .update-card p { margin: 0; color: #d1d5db; line-height: 1.5; }
+    .update-version-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .update-version-row strong { display: block; margin-top: 3px; }
+    .update-arrow { color: var(--muted); font-size: 1.2rem; }
+    .update-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .helper-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 620px;
+      padding: 20px 22px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.75);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      user-select: text;
+    }
+    .helper-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .helper-head h3 { margin: 0; font-size: 1.04rem; }
+    .helper-preview-row {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .helper-preview-img {
+      width: 96px;
+      height: 96px;
+      border-radius: 8px;
+      background: #0b0c10;
+      object-fit: contain;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .helper-preview-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: #d1d5db;
+    }
+    .helper-extract-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .helper-textarea {
+      width: 100%;
+      min-height: 105px;
+      resize: vertical;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      outline: none;
+    }
+    .helper-textarea:focus { border-color: var(--accent); }
+    .helper-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .helper-chips button {
+      padding: 4px 10px;
+      font-size: 0.76rem;
+      font-weight: 500;
+    }
+    .helper-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+
+    .compare-overlay { display: none; position: absolute; inset: 0; pointer-events: none; }
+    .compare-overlay img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+    .compare-after-wrap { position: absolute; inset: 0; overflow: hidden; }
+    .compare-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; }
+    .compare-bar {
+      display: none;
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 16px;
+      align-items: center;
+      gap: 12px;
+      z-index: 20;
+    }
+
+    .toolbar {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .prompt-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 640px;
+      max-width: 880px;
+      min-width: 0;
+    }
+
+    #promptHelperBtn {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 5px 11px;
+      border-radius: 9px;
+      font-size: 0.84rem;
+    }
+
+    @media (max-width: 760px) {
+      header { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; }
+      .telemetry-strip { order: 3; width: 100%; }
+      .header-actions { gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+      .mask-toolbar { left: 8px; bottom: 8px; padding: 6px; gap: 5px; }
+      .mask-tools-row { flex-wrap: wrap; }
+      .mask-toolbar .tool-group { padding: 3px 6px; gap: 5px; }
+      .mask-toolbar .tool-group input[type="range"] { width: 64px; }
+      .toolbar { padding: 8px; gap: 6px; }
+      .prompt-controls { flex-basis: 100%; }
+    }
+
+    #promptInput { flex: 1 1 auto; min-width: 0; }
+
+    #splashScreen {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 16, 20, 0.98);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      z-index: 100;
+    }
+
+    #splashScreen.compact {
+      inset: auto 18px 18px auto;
+      width: min(420px, calc(100vw - 36px));
+      padding: 14px 16px;
+      align-items: flex-start;
+      justify-content: flex-start;
+      text-align: left;
+      background: rgba(24, 26, 32, 0.97);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(8px);
+      z-index: 30;
+    }
+    #splashScreen.compact h2 {
+      margin: 0 0 5px 0;
+      font-size: 0.96rem;
+    }
+    #splashScreen.compact .spinner {
+      width: 22px;
+      height: 22px;
+      border-width: 3px;
+      margin-bottom: 9px;
+    }
+    #splashScreen.compact .splash-msg {
+      margin: 0;
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+    #splashScreen.compact .log-box,
+    #splashScreen.compact .auth-card {
+      display: none;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--surface-2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .splash-msg { color: var(--muted); max-width: 720px; line-height: 1.5; margin: 8px 0 14px; }
+
+    .auth-card {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      max-width: 640px;
+      width: 100%;
+      text-align: left;
+      margin-bottom: 14px;
+    }
+    .auth-steps { font-size: 0.88rem; color: #d1d5db; line-height: 1.6; margin-bottom: 12px; }
+    .auth-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .token-row { display: flex; gap: 8px; }
+    .token-row input { flex: 1; }
+    .auth-err { color: #f87171; font-size: 0.84rem; margin-top: 8px; min-height: 18px; }
+
+    .log-box {
+      width: 100%;
+      max-width: 780px;
+      height: 210px;
+      background: #090a0d;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: Consolas, Monaco, "Courier New", monospace;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      text-align: left;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.45;
+      user-select: text;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="splashScreen" aria-live="polite">
+    <div class="spinner" id="splashSpinner"></div>
+    <h2 id="splashTitle">Préparation de Lampyre...</h2>
+    <p class="splash-msg" id="splashMsg">Connexion au serveur local...</p>
+
+    <div class="auth-card" id="authCard">
+      <div class="auth-steps">
+        <strong>1.</strong> Ouvrez Hugging Face dans votre navigateur, connectez-vous à votre compte et acceptez l'accès au modèle <strong>briaai/Fibo-2.0-edit-turbo</strong>.<br/>
+        <strong>2.</strong> Ouvrez vos paramètres de jetons (<em>Read</em>), copiez votre jeton <code>hf_...</code> et validez ci-dessous :
+      </div>
+      <div class="auth-links">
+        <button class="secondary" onclick="openHfInBrowser()">Se connecter dans le navigateur</button>
+        <a class="btn-link secondary" id="linkModel" href="https://huggingface.co/briaai/Fibo-2.0-edit-turbo" target="_blank" rel="noopener">Page du modèle</a>
+        <a class="btn-link secondary" id="linkTokens" href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Créer un jeton (Read)</a>
+      </div>
+      <div class="token-row">
+        <input type="password" id="hfTokenInput" placeholder="Collez votre jeton Hugging Face (hf_...)" />
+        <button id="saveTokenBtn" onclick="submitAuth()">Valider et télécharger</button>
+      </div>
+      <div class="auth-err" id="authErr"></div>
+    </div>
+
+    <div class="log-box" id="splashLogs">[Initialisation des journaux...]</div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <img class="brand-logo" src="/logo.png" alt="Lampyre" />
+      <span>Lampyre</span>
+    </div>
+
+    <div class="telemetry-strip">
+      <div class="badge" id="gpuBadge">GPU : Détection...</div>
+      <div class="badge ok" id="vramBadge">VRAM : --</div>
+      <div class="badge" id="modelBadge">Modèle : --</div>
+    </div>
+
+    <div class="header-actions">
+      <button class="secondary" id="versionsToggleBtn" onclick="toggleVersionsPanel()" disabled><span>Versions (<span id="versionsCount">0</span>)</span></button>
+      <button class="secondary" id="settingsToggleBtn" onclick="toggleSettingsDrawer()">Réglages &amp; VRAM</button>
+      <button class="secondary" id="openFileBtn" onclick="document.getElementById('fileInput').click()">Ouvrir une photo</button>
+      <button class="secondary" id="pasteImageBtn" onclick="pasteImageFromClipboard()">Coller une image</button>
+      <button class="secondary" id="closeImageBtn" onclick="closeImage()" disabled>Fermer la photo</button>
+      <button class="secondary" id="compareToggleBtn" onclick="toggleCompare()" disabled>Avant / Après</button>
+      <div class="export-group">
+        <select id="exportFormat" title="Format d'enregistrement">
+          <option value="png">PNG</option>
+          <option value="jpeg">JPG</option>
+          <option value="webp">WEBP</option>
+        </select>
+        <button id="saveBtn" onclick="saveResult()" disabled>Enregistrer</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="processingOverlay" aria-modal="true" role="dialog">
+    <div class="proc-card">
+      <div class="spinner" style="margin-bottom:4px;"></div>
+      <h3 id="procTitle">Retouche IA en cours...</h3>
+      <div class="proc-timer" id="procTimer">00:00</div>
+      <p class="proc-hint">L'interface est verrouillée pendant le traitement GPU pour éviter toute erreur. Veuillez patienter.</p>
+      <div class="proc-log" id="procLog">Préparation du crop et envoi au moteur FIBO 2.0...</div>
+    </div>
+  </div>
+
+  <div id="brushCursor"></div>
+  <div id="toastContainer"></div>
+
+  <div id="updateModal" aria-modal="true" role="dialog">
+    <div class="update-card">
+      <h3>Une mise à jour est disponible</h3>
+      <p>Lampyre peut installer la nouvelle version puis redémarrer automatiquement. Vos données locales et votre environnement Python portable seront conservés.</p>
+      <div class="update-version-row">
+        <div><span class="kv-label">Version installée</span><strong id="popupUpdateCurrent">--</strong></div>
+        <span class="update-arrow">→</span>
+        <div><span class="kv-label">Nouvelle version</span><strong id="popupUpdateLatest">--</strong></div>
+      </div>
+      <p id="popupUpdateStatus" style="color:var(--muted);"></p>
+      <div class="update-actions">
+        <button class="secondary" id="popupUpdateLaterBtn" onclick="closeUpdatePopup()">Plus tard</button>
+        <button id="popupUpdateNowBtn" onclick="installAndRestartUpdate()">Mettre à jour et relancer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="promptHelperModal" aria-modal="true" role="dialog">
+    <div class="helper-card">
+      <div class="helper-head">
+        <h3>✨ Assistant Prompt — Zone masquée</h3>
+        <button class="secondary" style="padding:4px 9px; font-size:0.78rem;" onclick="closePromptHelper()">✕</button>
+      </div>
+
+      <div class="helper-preview-row">
+        <img id="helperPreviewImg" class="helper-preview-img" alt="Aperçu zone" />
+        <div class="helper-preview-info">
+          <div id="helperRegionMeta">Extrayez automatiquement la description de la zone coloriée au pinceau grâce à l'IA vision intégrée (Qwen3-VL), puis modifiez le prompt avant de lancer la retouche.</div>
+          <div class="helper-extract-row">
+            <select id="helperLang" style="padding:6px 8px; font-size:0.8rem;">
+              <option value="fr">Français</option>
+              <option value="en">English (optimal FIBO)</option>
+            </select>
+            <button id="helperExtractBtn" onclick="extractPromptFromMask()">🔍 Extraire le prompt de la zone</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label for="helperPromptArea" style="display:block; font-size:0.82rem; font-weight:600; color:#d1d5db; margin-bottom:6px;">
+          Prompt d'édition (modifiable librement) :
+        </label>
+        <textarea
+          id="helperPromptArea"
+          class="helper-textarea"
+          placeholder="Cliquez sur « Extraire le prompt de la zone » ou saisissez directement votre description de retouche..."
+        ></textarea>
+      </div>
+
+      <div class="helper-chips">
+        <button class="secondary" onclick="applyPromptTemplate('replace')">Remplacer par...</button>
+        <button class="secondary" onclick="applyPromptTemplate('remove')">Supprimer l'élément</button>
+        <button class="secondary" onclick="applyPromptTemplate('color')">Changer la couleur en...</button>
+        <button class="secondary" onclick="applyPromptTemplate('lighting')">Améliorer lumière &amp; texture</button>
+      </div>
+
+      <div class="helper-footer">
+        <button class="secondary" onclick="closePromptHelper()">Fermer</button>
+        <button class="secondary" onclick="useHelperPromptOnly()">Utiliser ce prompt</button>
+        <button id="helperSubmitBtn" onclick="submitHelperPromptAndEdit()">Soumettre &amp; Retoucher</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-shell">
+    <aside class="versions-panel" id="versionsPanel">
+      <div class="versions-header">
+        <span>Versions de l'image</span>
+        <button class="secondary" style="padding:3px 8px; font-size:0.75rem;" onclick="toggleVersionsPanel()">✕</button>
+      </div>
+      <div class="versions-list" id="versionsList"></div>
+    </aside>
+
+    <main id="mainArea">
+      <input type="file" id="fileInput" accept="image/*" hidden />
+
+      <div class="drop-box" id="dropBox" onclick="document.getElementById('fileInput').click()">
+        <h2>Glissez-déposez une photo ici</h2>
+        <p>Ou cliquez pour choisir un fichier (JPG, PNG, WEBP). Coloriez la zone à retoucher : Lampyre ne traite que le crop utile pour économiser la VRAM et accélérer le rendu.</p>
+      </div>
+
+      <div class="zoom-bar" id="zoomBar">
+        <button class="secondary" onclick="adjustZoom(-0.25)" title="Zoom arrière">−</button>
+        <span class="zoom-label" id="zoomLabel">Ajusté</span>
+        <button class="secondary" onclick="adjustZoom(0.25)" title="Zoom avant">+</button>
+        <button class="secondary" onclick="resetZoom()" title="Ajuster à l'écran">Ajuster</button>
+      </div>
+
+      <div class="workspace" id="workspace">
+        <div class="canvas-stage" id="canvasStage">
+          <canvas id="imageCanvas"></canvas>
+          <canvas id="maskCanvas"></canvas>
+          <div class="compare-overlay" id="compareOverlay">
+            <img id="compareBeforeImg" alt="Avant" />
+            <div class="compare-after-wrap" id="compareAfterWrap">
+              <img id="compareAfterImg" alt="Après" />
+            </div>
+            <div class="compare-line" id="compareLine"></div>
+          </div>
+        </div>
+
+        <div class="compare-bar" id="compareBar">
+          <span style="font-size:0.82rem; color:var(--muted);">Comparer avec</span>
+          <select id="compareRefSelect" onchange="refreshCompareSource()" style="padding:4px 8px; font-size:0.8rem;"></select>
+          <input type="range" id="compareSlider" min="0" max="100" value="50" oninput="updateCompare(this.value)" />
+          <span style="font-size:0.82rem; color:var(--muted);">Active</span>
+        </div>
+      </div>
+
+      <div class="mask-toolbar" id="maskToolbar" aria-label="Outils du masque">
+        <div class="mask-tools-row">
+          <button class="secondary tool-btn active" id="brushBtn" onclick="setMode('brush')" title="Ajouter au masque (Pinceau, B)" aria-label="Ajouter au masque">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m14 6 4 4M3 21l3.5-.8L19 7.7a2.1 2.1 0 0 0-3-3L3.8 17.5 3 21Z" />
+              <path d="M5 14.5h5M7.5 12v5" />
+            </svg>
+            <span>Ajouter</span>
+          </button>
+          <button class="secondary tool-btn" id="eraserBtn" onclick="setMode('eraser')" title="Retirer du masque (Gomme, E)" aria-label="Retirer du masque">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m3.5 14.5 9-9a2.1 2.1 0 0 1 3 0l5 5a2.1 2.1 0 0 1 0 3l-7 7h-6l-4-4a2.1 2.1 0 0 1 0-3Z" />
+              <path d="m8 10 8 8M13 20.5h7.5" />
+            </svg>
+            <span>Retirer</span>
+          </button>
+          <button class="secondary icon-btn" id="undoBtn" onclick="undo()" disabled title="Annuler (Ctrl+Z)" aria-label="Annuler">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-2" />
+            </svg>
+          </button>
+          <button class="secondary icon-btn" id="redoBtn" onclick="redo()" disabled title="Rétablir (Ctrl+Y)" aria-label="Rétablir">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 14 5-5-5-5" /><path d="M20 9H10a6 6 0 0 0 0 12h2" />
+            </svg>
+          </button>
+          <button class="secondary icon-btn" id="clearMaskBtn" onclick="clearMask()" disabled title="Effacer tout le masque" aria-label="Effacer tout le masque">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" />
+            </svg>
+          </button>
+        </div>
+        <div class="mask-tools-row">
+          <div class="tool-group">
+            <label for="brushSize">Taille</label>
+            <input type="range" id="brushSize" min="6" max="160" value="36" />
+            <span id="brushSizeLabel">36 px</span>
+          </div>
+          <div class="tool-group mask-hue">
+            <label for="maskHue">Teinte</label>
+            <input type="range" id="maskHue" min="0" max="360" value="0" />
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="settings-drawer" id="settingsDrawer">
+      <div class="drawer-title">
+        <span>Modèles, VRAM &amp; Réglages</span>
+        <button class="secondary" style="padding:4px 9px; font-size:0.78rem;" onclick="toggleSettingsDrawer()">✕</button>
+      </div>
+
+      <div class="panel-box">
+        <h4>État Modèle &amp; VRAM</h4>
+        <div class="kv-row"><span class="kv-label">Pipeline</span><span class="kv-val" id="telPipeline">--</span></div>
+        <div class="kv-row"><span class="kv-label">Précision (dtype)</span><span class="kv-val" id="telDtype">--</span></div>
+        <div class="kv-row"><span class="kv-label">Offload / Placement</span><span class="kv-val" id="telOffload">--</span></div>
+        <div class="kv-row"><span class="kv-label">Profil actif</span><span class="kv-val" id="telProfile">--</span></div>
+        <div class="kv-row"><span class="kv-label">Taille max zone</span><span class="kv-val" id="telMaxSide">--</span></div>
+        <div class="kv-row"><span class="kv-label">Dernière zone</span><span class="kv-val" id="telRegion">--</span></div>
+        <div class="kv-row"><span class="kv-label">Dernier rendu</span><span class="kv-val" id="telTime">--</span></div>
+        <div class="kv-row"><span class="kv-label">Pic VRAM (rendu)</span><span class="kv-val" id="telPeakVram">--</span></div>
+
+        <div class="vram-bar-bg">
+          <div class="vram-bar-fill" id="vramBarFill"></div>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">VRAM allouée / libre</span>
+          <span class="kv-val" id="telVramDetail">--</span>
+        </div>
+
+        <div class="comp-list" id="telComponents">Aucun composant chargé.</div>
+      </div>
+
+      <div class="panel-box">
+        <h4>Mise à jour Lampyre</h4>
+        <div class="kv-row"><span class="kv-label">Version installée</span><span class="kv-val" id="updateCurrentVersion">--</span></div>
+        <div class="kv-row"><span class="kv-label">Dernière version</span><span class="kv-val" id="updateLatestVersion">--</span></div>
+        <div class="kv-row" id="updateMessage" style="display:block; color:var(--muted);"></div>
+        <div class="drawer-actions">
+          <button class="secondary" id="checkUpdateBtn" onclick="checkForUpdate()">Rechercher une mise à jour</button>
+          <button id="installUpdateBtn" onclick="installUpdate()" disabled>Installer la mise à jour</button>
+          <button class="secondary" id="restartUpdateBtn" onclick="restartAfterUpdate()" disabled>Redémarrer Lampyre</button>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <h4>Optimisation VRAM &amp; Crop</h4>
+
+        <div class="field-group">
+          <label for="optVramProfile">Profil VRAM</label>
+          <select id="optVramProfile">
+            <option value="auto">Automatique (détection VRAM)</option>
+            <option value="6gb">6 Go VRAM (FP16 + Group Offload 2 blocs + Crop 768px)</option>
+            <option value="8gb">8 Go VRAM (FP16 + Group Offload 4 blocs + Crop 768px)</option>
+            <option value="high">12 Go+ VRAM (Group Offload 6 blocs / CUDA direct >=24Go)</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="optMaxSide">Résolution max zone retouchée (0 = auto)</label>
+          <select id="optMaxSide">
+            <option value="0">Automatique selon profil</option>
+            <option value="512">512 px (Ultra rapide / 6 Go)</option>
+            <option value="768">768 px (Équilibré 6–8 Go)</option>
+            <option value="1024">1024 px (Haute qualité 8 Go+)</option>
+            <option value="1280">1280 px (Très détaillé)</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="optCropPadding">Marge autour du masque (px)</label>
+          <input type="number" id="optCropPadding" min="16" max="256" step="8" value="64" />
+        </div>
+
+        <div class="field-group">
+          <label for="optFeather">Fondu des bords au recollement (px)</label>
+          <input type="number" id="optFeather" min="1" max="48" step="1" value="12" />
+        </div>
+
+        <div class="field-group">
+          <label for="optSteps">Étapes d'inférence (Turbo : 2–8)</label>
+          <input type="number" id="optSteps" min="2" max="12" step="1" value="4" />
+        </div>
+
+        <div class="field-group">
+          <label for="optCfg">Guidance scale</label>
+          <input type="number" id="optCfg" min="0.5" max="7.5" step="0.5" value="1.0" />
+        </div>
+
+        <div class="field-group">
+          <label for="optSeed">Graine aléatoire (optionnel)</label>
+          <input type="number" id="optSeed" placeholder="Aléatoire si vide" />
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="optAutoUnload" />
+          <span>Décharger le modèle après chaque retouche (économie VRAM maximale)</span>
+        </label>
+
+        <div class="drawer-actions">
+          <button onclick="saveSettings(false)">Enregistrer les réglages</button>
+          <button class="secondary" onclick="saveSettings(true)">Appliquer &amp; recharger le modèle</button>
+          <button class="secondary" onclick="flushVramNow()">Libérer la VRAM maintenant</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toolbar" id="mainToolbar">
+    <div class="prompt-controls">
+      <button class="secondary" id="promptHelperBtn" onclick="openPromptHelper()" disabled title="Extraire le prompt de la zone masquée et le modifier">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:16px;height:16px;">
+          <path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" />
+          <path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z" />
+        </svg>
+        Aide prompt
+      </button>
+      <input
+        type="text"
+        id="promptInput"
+        placeholder="Décrivez la retouche (ou laissez vide pour effacer l'élément)"
+      />
+    </div>
+
+    <button id="applyBtn" onclick="runEdit()" disabled>Appliquer</button>
+  </div>
+
+  <script>
+    const imgCanvas = document.getElementById("imageCanvas");
+    const maskCanvas = document.getElementById("maskCanvas");
+    const imgCtx = imgCanvas.getContext("2d");
+    const maskCtx = maskCanvas.getContext("2d");
+
+    const brushSizeInput = document.getElementById("brushSize");
+    const brushSizeLabel = document.getElementById("brushSizeLabel");
+    const maskHueInput = document.getElementById("maskHue");
+    const brushCursor = document.getElementById("brushCursor");
+
+    let mode = "brush";
+    let drawing = false;
+    let modelReady = false;
+    let imageLoaded = false;
+    let isProcessing = false;
+    let serverProcessing = false;
+    let compareActive = false;
+    let settingsSyncedOnce = false;
+    let currentFileBaseName = "Lampyre";
+    let zoomScale = 0; // 0 = ajusté à l'écran
+    let panning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panStartScrollLeft = 0;
+    let panStartScrollTop = 0;
+
+    // Historique des versions de l'image : [{ id, label, dataUrl, prompt, createdAt, durationMs, region, parentLabel }]
+    let versions = [];
+    let activeVersionId = null;
+    let nextVersionNum = 1;
+
+    // Pile Annuler / Rétablir pour les tracés de masque et retouches
+    const historyStack = [];
+    const redoStack = [];
+    const MAX_HISTORY = 20;
+
+    let procTimerInterval = null;
+    let procStartMs = 0;
+    let updatePopupShown = false;
+
+    function showToast(msg, type = "info") {
+      const container = document.getElementById("toastContainer");
+      const el = document.createElement("div");
+      el.className = "toast" + (type === "ok" ? " ok" : type === "err" ? " err" : "");
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = "0";
+        el.style.transition = "opacity 0.25s ease";
+        setTimeout(() => el.remove(), 260);
+      }, 3200);
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function setProcessingState(active, titleText = "Retouche IA en cours...") {
+      isProcessing = Boolean(active);
+      const overlay = document.getElementById("processingOverlay");
+      document.getElementById("procTitle").textContent = titleText;
+      overlay.classList.toggle("active", isProcessing);
+
+      if (isProcessing) {
+        drawing = false;
+        brushCursor.style.display = "none";
+        procStartMs = Date.now();
+        document.getElementById("procTimer").textContent = "00:00";
+        clearInterval(procTimerInterval);
+        procTimerInterval = setInterval(() => {
+          const sec = Math.floor((Date.now() - procStartMs) / 1000);
+          const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+          const ss = String(sec % 60).padStart(2, "0");
+          document.getElementById("procTimer").textContent = `${mm}:${ss}`;
+        }, 500);
+      } else {
+        clearInterval(procTimerInterval);
+        procTimerInterval = null;
+      }
+
+      const controls = document.querySelectorAll(
+        "header button, header select, .toolbar button, .toolbar input, .mask-toolbar button, .mask-toolbar input, .settings-drawer button, .settings-drawer input, .settings-drawer select, .versions-panel button, .zoom-bar button, #promptHelperModal button, #promptHelperModal select, #promptHelperModal textarea"
+      );
+      controls.forEach((el) => {
+        if (isProcessing) {
+          el.dataset.prevDisabled = el.disabled ? "1" : "0";
+          el.disabled = true;
+        } else {
+          if (el.dataset.prevDisabled !== undefined) {
+            el.disabled = el.dataset.prevDisabled === "1";
+            delete el.dataset.prevDisabled;
+          }
+        }
+      });
+
+      if (!isProcessing) updateActionButtons();
+    }
+
+    brushSizeInput.addEventListener("input", () => {
+      brushSizeLabel.textContent = `${brushSizeInput.value} px`;
+      updateBrushCursorSize();
+    });
+
+    maskHueInput.addEventListener("input", () => {
+      maskCanvas.style.filter = `hue-rotate(${maskHueInput.value}deg)`;
+    });
+
+    document.getElementById("promptInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (!isProcessing && modelReady && imageLoaded) runEdit();
+      }
+    });
+
+    function toggleSettingsDrawer() {
+      if (isProcessing) return;
+      const drawer = document.getElementById("settingsDrawer");
+      const btn = document.getElementById("settingsToggleBtn");
+      const open = drawer.classList.toggle("open");
+      btn.classList.toggle("active", open);
+    }
+
+    function toggleVersionsPanel(forceOpen = null) {
+      if (isProcessing) return;
+      const panel = document.getElementById("versionsPanel");
+      const btn = document.getElementById("versionsToggleBtn");
+      const open = forceOpen !== null ? Boolean(forceOpen) : !panel.classList.contains("open");
+      panel.classList.toggle("open", open);
+      btn.classList.toggle("active", open);
+    }
+
+    function setMode(newMode) {
+      if (isProcessing) return;
+      mode = newMode;
+      document.getElementById("brushBtn").classList.toggle("active", mode === "brush");
+      document.getElementById("eraserBtn").classList.toggle("active", mode === "eraser");
+      brushCursor.classList.toggle("eraser", mode === "eraser");
+    }
+
+    function applyZoom() {
+      const ws = document.getElementById("workspace");
+      const label = document.getElementById("zoomLabel");
+      if (!imageLoaded || zoomScale <= 0) {
+        ws.classList.remove("zoomed");
+        imgCanvas.style.width = "";
+        imgCanvas.style.height = "";
+        label.textContent = "Ajusté";
+      } else {
+        ws.classList.add("zoomed");
+        imgCanvas.style.width = `${Math.round(imgCanvas.width * zoomScale)}px`;
+        imgCanvas.style.height = `${Math.round(imgCanvas.height * zoomScale)}px`;
+        label.textContent = `${Math.round(zoomScale * 100)}%`;
+      }
+      updateBrushCursorSize();
+    }
+
+    function adjustZoom(delta, anchor = null) {
+      if (!imageLoaded || isProcessing) return;
+      const fitScale = Math.min(
+        1,
+        (window.innerWidth * 0.78) / Math.max(1, imgCanvas.width),
+        Math.max(1, window.innerHeight - 190) / Math.max(1, imgCanvas.height)
+      );
+      const previousRect = anchor ? imgCanvas.getBoundingClientRect() : null;
+      const anchorX = previousRect
+        ? (anchor.clientX - previousRect.left) / previousRect.width
+        : 0;
+      const anchorY = previousRect
+        ? (anchor.clientY - previousRect.top) / previousRect.height
+        : 0;
+      if (zoomScale <= 0) {
+        const rect = previousRect || imgCanvas.getBoundingClientRect();
+        zoomScale = rect.width / Math.max(1, imgCanvas.width);
+      }
+      const requestedScale = Math.round((zoomScale + delta) * 20) / 20;
+      if (delta < 0 && requestedScale <= fitScale) {
+        resetZoom();
+        return;
+      }
+      zoomScale = Math.max(0.2, Math.min(4.0, requestedScale));
+      applyZoom();
+      if (anchor) {
+        const ws = document.getElementById("workspace");
+        const nextRect = imgCanvas.getBoundingClientRect();
+        ws.scrollLeft += nextRect.left + nextRect.width * anchorX - anchor.clientX;
+        ws.scrollTop += nextRect.top + nextRect.height * anchorY - anchor.clientY;
+      }
+    }
+
+    function resetZoom() {
+      if (!imageLoaded || isProcessing) return;
+      zoomScale = 0;
+      applyZoom();
+    }
+
+    const workspace = document.getElementById("workspace");
+
+    workspace.addEventListener(
+      "wheel",
+      (e) => {
+        if (!imageLoaded || isProcessing) return;
+        e.preventDefault();
+        adjustZoom(e.deltaY < 0 ? 0.15 : -0.15, e);
+      },
+      { passive: false }
+    );
+
+    workspace.addEventListener("mousedown", (e) => {
+      if (
+        e.button !== 1 ||
+        !imageLoaded ||
+        isProcessing ||
+        zoomScale <= 0 ||
+        !document.getElementById("canvasStage").contains(e.target)
+      ) {
+        return;
+      }
+
+      e.preventDefault();
+      panning = true;
+      panStartX = e.clientX;
+      panStartY = e.clientY;
+      panStartScrollLeft = workspace.scrollLeft;
+      panStartScrollTop = workspace.scrollTop;
+      workspace.classList.add("panning");
+      brushCursor.style.display = "none";
+    });
+
+    workspace.addEventListener("auxclick", (e) => {
+      if (e.button === 1) e.preventDefault();
+    });
+
+    function updateBrushCursorSize() {
+      if (!imageLoaded) return;
+      const rect = maskCanvas.getBoundingClientRect();
+      if (!rect.width || !maskCanvas.width) return;
+      const scale = rect.width / maskCanvas.width;
+      const px = Math.max(6, Number(brushSizeInput.value) * scale);
+      brushCursor.style.width = `${px}px`;
+      brushCursor.style.height = `${px}px`;
+    }
+
+    function configureBrushSizeForImage(width, height) {
+      const maxBrushSize = Math.max(1, Math.floor(Math.max(width, height) / 4));
+      const minBrushSize = Math.min(6, maxBrushSize);
+      brushSizeInput.min = String(minBrushSize);
+      brushSizeInput.max = String(maxBrushSize);
+      brushSizeInput.value = String(
+        Math.min(maxBrushSize, Math.max(minBrushSize, Number(brushSizeInput.value)))
+      );
+      brushSizeLabel.textContent = `${brushSizeInput.value} px`;
+    }
+
+    function pushHistory() {
+      if (!imageLoaded) return;
+      historyStack.push({
+        img: imgCanvas.toDataURL("image/png"),
+        mask: maskCanvas.toDataURL("image/png"),
+        versionId: activeVersionId,
+      });
+      if (historyStack.length > MAX_HISTORY) historyStack.shift();
+      redoStack.length = 0;
+      updateHistoryButtons();
+    }
+
+    function updateHistoryButtons() {
+      document.getElementById("undoBtn").disabled = isProcessing || historyStack.length <= 1;
+      document.getElementById("redoBtn").disabled = isProcessing || redoStack.length === 0;
+    }
+
+    function restoreState(entry) {
+      const i1 = new Image();
+      const i2 = new Image();
+      i1.onload = () => {
+        imgCtx.clearRect(0, 0, imgCanvas.width, imgCanvas.height);
+        imgCtx.drawImage(i1, 0, 0);
+      };
+      i2.onload = () => {
+        maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+        maskCtx.drawImage(i2, 0, 0);
+      };
+      i1.src = entry.img;
+      i2.src = entry.mask;
+      if (entry.versionId && versions.some((v) => v.id === entry.versionId)) {
+        activeVersionId = entry.versionId;
+        renderVersionsPanel();
+      }
+    }
+
+    function undo() {
+      if (isProcessing || historyStack.length <= 1) return;
+      redoStack.push(historyStack.pop());
+      restoreState(historyStack[historyStack.length - 1]);
+      updateHistoryButtons();
+    }
+
+    function redo() {
+      if (isProcessing || redoStack.length === 0) return;
+      const next = redoStack.pop();
+      historyStack.push(next);
+      restoreState(next);
+      updateHistoryButtons();
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (isProcessing) {
+        e.preventDefault();
+        return;
+      }
+      const tag = (e.target && e.target.tagName) || "";
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        if (!typing) {
+          e.preventDefault();
+          undo();
+        }
+      } else if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))
+      ) {
+        if (!typing) {
+          e.preventDefault();
+          redo();
+        }
+      } else if (!typing && imageLoaded) {
+        if (e.key.toLowerCase() === "b") setMode("brush");
+        else if (e.key.toLowerCase() === "e") setMode("eraser");
+        else if (e.key === "[") {
+          brushSizeInput.value = String(
+            Math.max(Number(brushSizeInput.min), Number(brushSizeInput.value) - 8)
+          );
+          brushSizeLabel.textContent = `${brushSizeInput.value} px`;
+          updateBrushCursorSize();
+        } else if (e.key === "]") {
+          brushSizeInput.value = String(
+            Math.min(Number(brushSizeInput.max), Number(brushSizeInput.value) + 8)
+          );
+          brushSizeLabel.textContent = `${brushSizeInput.value} px`;
+          updateBrushCursorSize();
+        }
+      }
+    });
+
+    function getActiveVersion() {
+      return versions.find((v) => v.id === activeVersionId) || versions[versions.length - 1] || null;
+    }
+
+    function renderVersionsPanel() {
+      const list = document.getElementById("versionsList");
+      document.getElementById("versionsCount").textContent = String(versions.length);
+
+      if (versions.length === 0) {
+        list.innerHTML = '<div style="color:var(--muted); font-size:0.8rem; padding:8px;">Aucune image chargée.</div>';
+        return;
+      }
+
+      list.innerHTML = versions
+        .slice()
+        .reverse()
+        .map((v) => {
+          const isActive = v.id === activeVersionId;
+          const isOrig = v.id === "v0";
+          const metaSub = isOrig
+            ? `${imgCanvas.width}×${imgCanvas.height}px • ${v.createdAt}`
+            : `${v.durationMs ? (v.durationMs / 1000).toFixed(1) + "s • " : ""}${v.createdAt}`;
+          const promptTitle = isOrig ? "Image originale" : (v.prompt || "Effacement / remplissage IA");
+          return `
+            <div class="version-card ${isActive ? "active" : ""}" onclick="selectVersion('${v.id}')" title="${escapeHtml(promptTitle)}${v.region ? "\n" + escapeHtml(v.region) : ""}">
+              <div class="version-thumb-wrap">
+                <img src="${v.dataUrl}" alt="${escapeHtml(v.label)}" />
+                <span class="version-tag">${escapeHtml(v.label)}${isActive ? " • Active" : ""}</span>
+              </div>
+              <div class="version-meta">
+                <div class="version-prompt">${escapeHtml(promptTitle)}</div>
+                <div class="version-sub">
+                  <span>${escapeHtml(metaSub)}</span>
+                </div>
+                <div class="version-actions">
+                  <button class="secondary" onclick="event.stopPropagation(); downloadVersion('${v.id}')" title="Enregistrer cette version">⬇ Enregistrer</button>
+                  ${
+                    isOrig
+                      ? ""
+                      : `<button class="secondary danger" onclick="event.stopPropagation(); deleteVersion('${v.id}')" title="Supprimer cette version">✕</button>`
+                  }
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      syncCompareSelect();
+    }
+
+    function syncCompareSelect() {
+      const sel = document.getElementById("compareRefSelect");
+      if (!sel) return;
+      const prevVal = sel.value;
+      sel.innerHTML = versions
+        .filter((v) => v.id !== activeVersionId)
+        .map((v) => `<option value="${v.id}">${escapeHtml(v.label)}</option>`)
+        .join("");
+      if (prevVal && Array.from(sel.options).some((o) => o.value === prevVal)) {
+        sel.value = prevVal;
+      } else if (sel.options.length > 0) {
+        sel.selectedIndex = 0;
+      }
+    }
+
+    function selectVersion(versionId) {
+      if (isProcessing) return;
+      const ver = versions.find((v) => v.id === versionId);
+      if (!ver) return;
+
+      activeVersionId = ver.id;
+      const img = new Image();
+      img.onload = () => {
+        imgCtx.clearRect(0, 0, imgCanvas.width, imgCanvas.height);
+        imgCtx.drawImage(img, 0, 0, imgCanvas.width, imgCanvas.height);
+        maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+        pushHistory();
+        renderVersionsPanel();
+        if (compareActive) refreshCompareSource();
+        updateActionButtons();
+        showToast(`Version affichée : ${ver.label}`);
+      };
+      img.src = ver.dataUrl;
+    }
+
+    function deleteVersion(versionId) {
+      if (isProcessing || versionId === "v0") return;
+      const idx = versions.findIndex((v) => v.id === versionId);
+      if (idx === -1) return;
+      const removed = versions[idx];
+      versions.splice(idx, 1);
+      if (activeVersionId === versionId) {
+        const fallback = versions[Math.max(0, idx - 1)] || versions[0];
+        selectVersion(fallback.id);
+      } else {
+        renderVersionsPanel();
+        if (compareActive) {
+          if (versions.length < 2) toggleCompare(false);
+          else refreshCompareSource();
+        }
+        updateActionButtons();
+      }
+      showToast(`Version supprimée : ${removed.label}`);
+    }
+
+    function exportDataUrlAsFormat(dataUrl, fileStem) {
+      const fmt = (document.getElementById("exportFormat").value || "png").toLowerCase();
+      const ext = fmt === "jpeg" ? "jpg" : fmt;
+      const mime = fmt === "jpeg" ? "image/jpeg" : fmt === "webp" ? "image/webp" : "image/png";
+
+      const triggerDownload = (href) => {
+        const a = document.createElement("a");
+        a.download = `${fileStem}.${ext}`;
+        a.href = href;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast(`Image enregistrée : ${fileStem}.${ext}`, "ok");
+      };
+
+      if (fmt === "png") {
+        triggerDownload(dataUrl);
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const ctx = c.getContext("2d");
+        if (fmt === "jpeg") {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, c.width, c.height);
+        }
+        ctx.drawImage(img, 0, 0);
+        triggerDownload(c.toDataURL(mime, 0.94));
+      };
+      img.src = dataUrl;
+    }
+
+    function downloadVersion(versionId) {
+      if (isProcessing) return;
+      const ver = versions.find((v) => v.id === versionId);
+      if (!ver) return;
+      const suffix = ver.id === "v0" ? "originale" : ver.id;
+      exportDataUrlAsFormat(ver.dataUrl, `${currentFileBaseName}-${suffix}`);
+    }
+
+    function saveResult() {
+      if (!imageLoaded || isProcessing) return;
+      const ver = getActiveVersion();
+      if (ver) {
+        downloadVersion(ver.id);
+      } else {
+        exportDataUrlAsFormat(imgCanvas.toDataURL("image/png"), `${currentFileBaseName}-resultat`);
+      }
+    }
+
+    function applySettingsToForm(s) {
+      if (!s) return;
+      document.getElementById("optVramProfile").value = s.vram_profile || "auto";
+      document.getElementById("optMaxSide").value = String(s.max_edit_side ?? 0);
+      document.getElementById("optCropPadding").value = s.crop_padding ?? 64;
+      document.getElementById("optFeather").value = s.feather_px ?? 12;
+      document.getElementById("optSteps").value = s.steps ?? 4;
+      document.getElementById("optCfg").value = s.guidance_scale ?? 1.0;
+      document.getElementById("optSeed").value = s.seed ?? "";
+      document.getElementById("optAutoUnload").checked = Boolean(s.auto_unload_idle);
+    }
+
+    function readSettingsFromForm() {
+      const seedRaw = document.getElementById("optSeed").value.trim();
+      return {
+        vram_profile: document.getElementById("optVramProfile").value,
+        max_edit_side: Number(document.getElementById("optMaxSide").value || 0),
+        crop_padding: Number(document.getElementById("optCropPadding").value || 64),
+        feather_px: Number(document.getElementById("optFeather").value || 12),
+        steps: Number(document.getElementById("optSteps").value || 4),
+        guidance_scale: Number(document.getElementById("optCfg").value || 1.0),
+        seed: seedRaw === "" ? null : Number(seedRaw),
+        auto_unload_idle: document.getElementById("optAutoUnload").checked,
+      };
+    }
+
+    function renderTelemetry(t) {
+      if (!t) return;
+      const vramBadge = document.getElementById("vramBadge");
+      const modelBadge = document.getElementById("modelBadge");
+
+      if (t.vram_total_mb > 0) {
+        const usedApprox = Math.max(0, t.vram_total_mb - t.vram_free_mb);
+        const pct = Math.min(100, Math.round((usedApprox / t.vram_total_mb) * 100));
+        vramBadge.textContent = `VRAM : ${(t.vram_free_mb / 1024).toFixed(1)} / ${(t.vram_total_mb / 1024).toFixed(1)} Go libres`;
+        vramBadge.className = t.vram_free_mb < 1200 ? "badge warn" : "badge ok";
+        document.getElementById("vramBarFill").style.width = `${pct}%`;
+        document.getElementById("telVramDetail").textContent =
+          `Alloc. ${t.vram_allocated_mb} Mo | Libre ${t.vram_free_mb} Mo`;
+      } else {
+        vramBadge.textContent = "VRAM : CPU / N/A";
+        vramBadge.className = "badge";
+        document.getElementById("vramBarFill").style.width = "0%";
+        document.getElementById("telVramDetail").textContent = "Mode CPU";
+      }
+
+      modelBadge.textContent = t.loaded
+        ? `Modèle : ${t.model_id || "FIBO 2.0 Edit Turbo"}`
+        : "Modèle : En attente";
+
+      document.getElementById("telPipeline").textContent = t.pipeline_class || "--";
+      document.getElementById("telDtype").textContent = t.dtype || "--";
+      document.getElementById("telOffload").textContent = t.offload_mode || "--";
+      document.getElementById("telProfile").textContent = (t.active_profile || "auto").toUpperCase();
+      document.getElementById("telMaxSide").textContent = `${t.effective_max_edit_side || 768} px`;
+      document.getElementById("telRegion").textContent = t.last_edit_region || "Aucune";
+      document.getElementById("telTime").textContent =
+        t.last_inference_ms != null ? `${(t.last_inference_ms / 1000).toFixed(1)} s` : "--";
+      document.getElementById("telPeakVram").textContent =
+        t.last_peak_vram_mb != null ? `${t.last_peak_vram_mb} Mo` : "--";
+
+      const compEl = document.getElementById("telComponents");
+      if (Array.isArray(t.components) && t.components.length > 0) {
+        compEl.innerHTML = t.components
+          .map((c) => `<div class="comp-item"><span>${c.name} (${c.device})</span><span>${c.size_mb} Mo</span></div>`)
+          .join("");
+      } else {
+        compEl.textContent = t.loaded ? "Composants gérés par le pipeline." : "Modèle non chargé.";
+      }
+    }
+
+    async function saveSettings(reloadModel) {
+      if (isProcessing) return;
+      const s = readSettingsFromForm();
+      try {
+        const res = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: s, reload_model: reloadModel }),
+        });
+        const data = await res.json();
+        if (data.telemetry) renderTelemetry(data.telemetry);
+        if (reloadModel) {
+          modelReady = false;
+          updateActionButtons();
+          const splash = document.getElementById("splashScreen");
+          splash.classList.add("compact");
+          splash.style.display = "flex";
+          document.getElementById("splashSpinner").style.display = "block";
+          document.getElementById("splashTitle").textContent = "Rechargement du modèle...";
+          document.getElementById("splashMsg").textContent = "Vous pouvez continuer à préparer votre retouche.";
+        } else {
+          showToast("Réglages enregistrés.", "ok");
+        }
+      } catch (e) {
+        showToast("Erreur réglages : " + e.message, "err");
+      }
+    }
+
+    async function flushVramNow() {
+      if (isProcessing) return;
+      try {
+        const res = await fetch("/api/flush-vram", { method: "POST" });
+        const data = await res.json();
+        if (data.telemetry) renderTelemetry(data.telemetry);
+        showToast("Cache VRAM libéré.", "ok");
+      } catch (_) {}
+    }
+
+    function renderUpdateStatus(update) {
+      if (!update) return;
+      document.getElementById("updateCurrentVersion").textContent = update.current_version || "--";
+      document.getElementById("updateLatestVersion").textContent = update.latest_version || "--";
+
+      const message = document.getElementById("updateMessage");
+      const checkBtn = document.getElementById("checkUpdateBtn");
+      const installBtn = document.getElementById("installUpdateBtn");
+      const restartBtn = document.getElementById("restartUpdateBtn");
+
+      checkBtn.disabled = !!update.downloading;
+      installBtn.disabled = !update.update_available || !!update.downloading || !!update.pending_restart;
+      restartBtn.disabled = !update.pending_restart;
+
+      if (update.error) {
+        message.textContent = "Erreur : " + update.error;
+      } else if (update.downloading) {
+        message.textContent = "Téléchargement et installation de la mise à jour...";
+      } else if (update.pending_restart) {
+        message.textContent = "Mise à jour prête. Redémarrez Lampyre.";
+        installBtn.disabled = true;
+      } else if (update.update_available) {
+        message.textContent = "Une nouvelle version est disponible.";
+      } else if (update.latest_version) {
+        message.textContent = "Lampyre est à jour.";
+      } else {
+        message.textContent = "Vérification automatique au démarrage.";
+      }
+    }
+
+    async function checkForUpdate() {
+      const btn = document.getElementById("checkUpdateBtn");
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/update/check", { cache: "no-store" });
+        const data = await res.json();
+        renderUpdateStatus(data);
+        if (!data.error && data.update_available) {
+          showToast("Nouvelle version disponible : " + data.latest_version, "ok");
+        } else if (!data.error) {
+          showToast("Aucune mise à jour disponible.", "ok");
+        }
+      } catch (e) {
+        showToast("Impossible de vérifier les mises à jour : " + e.message, "err");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function installUpdate() {
+      if (isProcessing) {
+        showToast("Attendez la fin du traitement avant la mise à jour.", "err");
+        return;
+      }
+      const installBtn = document.getElementById("installUpdateBtn");
+      installBtn.disabled = true;
+      try {
+        const res = await fetch("/api/update/install", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Installation impossible");
+        showToast(data.message || "Mise à jour installée.", "ok");
+        await checkForUpdate();
+      } catch (e) {
+        showToast("Échec de la mise à jour : " + e.message, "err");
+        await checkForUpdate();
+      }
+    }
+
+    async function restartAfterUpdate() {
+      try {
+        await fetch("/api/update/restart", { method: "POST" });
+        showToast("Redémarrage en cours...", "ok");
+      } catch (_) {
+        showToast("Impossible de redémarrer automatiquement.", "err");
+      }
+    }
+
+    function openUpdatePopup(update) {
+      if (!update || !update.update_available || updatePopupShown) return;
+      updatePopupShown = true;
+      document.getElementById("popupUpdateCurrent").textContent = update.current_version || "--";
+      document.getElementById("popupUpdateLatest").textContent = update.latest_version || "--";
+      document.getElementById("popupUpdateStatus").textContent =
+        "Cette mise à jour est facultative : vous pouvez continuer avec cette version.";
+      document.getElementById("popupUpdateNowBtn").disabled = false;
+      document.getElementById("popupUpdateLaterBtn").disabled = false;
+      document.getElementById("updateModal").classList.add("open");
+    }
+
+    function closeUpdatePopup() {
+      document.getElementById("updateModal").classList.remove("open");
+    }
+
+    async function installAndRestartUpdate() {
+      if (isProcessing) {
+        document.getElementById("popupUpdateStatus").textContent =
+          "Attendez la fin du traitement GPU avant de mettre à jour.";
+        showToast("Attendez la fin du traitement avant la mise à jour.", "err");
+        return;
+      }
+
+      const nowBtn = document.getElementById("popupUpdateNowBtn");
+      const laterBtn = document.getElementById("popupUpdateLaterBtn");
+      const status = document.getElementById("popupUpdateStatus");
+      nowBtn.disabled = true;
+      laterBtn.disabled = true;
+      status.textContent = "Téléchargement et installation de la mise à jour...";
+
+      try {
+        const installRes = await fetch("/api/update/install", { method: "POST" });
+        const installData = await installRes.json();
+        if (!installRes.ok || !installData.ok) {
+          throw new Error(installData.error || installData.detail || "Installation impossible");
+        }
+
+        status.textContent = "Installation terminée. Redémarrage de Lampyre...";
+        await fetch("/api/update/restart", { method: "POST" });
+        showToast("Mise à jour installée. Redémarrage en cours...", "ok");
+      } catch (e) {
+        status.textContent = "Échec : " + e.message;
+        nowBtn.disabled = false;
+        laterBtn.disabled = false;
+        showToast("Échec de la mise à jour : " + e.message, "err");
+        await checkForUpdate();
+      }
+    }
+
+    async function pollStatus() {
+      try {
+        const res = await fetch("/api/status?t=" + Date.now(), { cache: "no-store" });
+        const data = await res.json();
+
+        if (data.update) renderUpdateStatus(data.update);
+        if (data.update) openUpdatePopup(data.update);
+
+        document.getElementById("gpuBadge").textContent =
+          data.cuda_available ? `GPU : ${data.gpu}` : `Mode : ${data.gpu}`;
+        document.getElementById("splashMsg").textContent = data.message;
+
+        try {
+          if (!settingsSyncedOnce && data.settings) {
+            applySettingsToForm(data.settings);
+            settingsSyncedOnce = true;
+          }
+        } catch (_) {}
+
+        try {
+          if (data.telemetry) renderTelemetry(data.telemetry);
+        } catch (_) {}
+
+        try {
+          if (data.hf_model_url) document.getElementById("linkModel").href = data.hf_model_url;
+          if (data.hf_tokens_url) document.getElementById("linkTokens").href = data.hf_tokens_url;
+        } catch (_) {}
+
+        if (Array.isArray(data.logs)) {
+          const logBox = document.getElementById("splashLogs");
+          logBox.textContent = data.logs.join("\n");
+          logBox.scrollTop = logBox.scrollHeight;
+
+          if (isProcessing || data.processing) {
+            const procLog = document.getElementById("procLog");
+            procLog.textContent = data.logs.slice(-6).join("\n");
+            procLog.scrollTop = procLog.scrollHeight;
+          }
+        }
+
+        // Synchronise le verrouillage si le serveur exécute déjà un traitement
+        if (data.processing && !isProcessing) {
+          serverProcessing = true;
+          setProcessingState(true, "Traitement GPU en cours...");
+        } else if (!data.processing && serverProcessing && isProcessing) {
+          serverProcessing = false;
+          setProcessingState(false);
+        }
+
+        if (data.state === "ready") {
+          modelReady = true;
+          const splash = document.getElementById("splashScreen");
+          if (splash) {
+            splash.classList.remove("compact");
+            splash.style.display = "none";
+          }
+          if (!isProcessing) updateActionButtons();
+        } else if (data.state === "needs_auth") {
+          modelReady = false;
+          const splash = document.getElementById("splashScreen");
+          splash.classList.remove("compact");
+          splash.style.display = "flex";
+          document.getElementById("splashSpinner").style.display = "none";
+          document.getElementById("splashTitle").textContent = "Connexion navigateur Hugging Face requise";
+          document.getElementById("authCard").style.display = "block";
+        } else if (data.state === "error") {
+          modelReady = false;
+          const splash = document.getElementById("splashScreen");
+          splash.classList.remove("compact");
+          splash.style.display = "flex";
+          document.getElementById("splashSpinner").style.display = "none";
+          document.getElementById("splashTitle").textContent = "Erreur lors de l'initialisation";
+          document.getElementById("authCard").style.display = "none";
+        } else {
+          modelReady = false;
+          const splash = document.getElementById("splashScreen");
+          splash.classList.add("compact");
+          splash.style.display = "flex";
+          document.getElementById("splashSpinner").style.display = "block";
+          document.getElementById("splashTitle").textContent = "Préparation de Lampyre...";
+          document.getElementById("authCard").style.display = "none";
+        }
+      } catch (err) {
+        const logBox = document.getElementById("splashLogs");
+        logBox.textContent = "[Attente réponse serveur] " + err.message;
+      }
+
+      setTimeout(pollStatus, 1000);
+    }
+
+    async function openHfInBrowser() {
+      window.open("https://huggingface.co/login", "_blank", "noopener");
+      window.open("https://huggingface.co/briaai/Fibo-2.0-edit-turbo", "_blank", "noopener");
+      try {
+        await fetch("/api/open-hf-browser", { method: "POST" });
+      } catch (_) {}
+    }
+
+    async function submitAuth() {
+      const tokenVal = document.getElementById("hfTokenInput").value.trim();
+      const errEl = document.getElementById("authErr");
+      errEl.textContent = "";
+      if (!tokenVal) {
+        errEl.textContent = "Veuillez coller votre jeton Hugging Face.";
+        return;
+      }
+
+      const btn = document.getElementById("saveTokenBtn");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hf_token: tokenVal }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errEl.textContent = data.detail || "Authentification refusée.";
+          btn.disabled = false;
+          return;
+        }
+        document.getElementById("authCard").style.display = "none";
+        document.getElementById("splashSpinner").style.display = "block";
+        document.getElementById("splashTitle").textContent = "Téléchargement du modèle en cours...";
+      } catch (e) {
+        errEl.textContent = "Erreur réseau : " + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function updateActionButtons() {
+      document.getElementById("applyBtn").disabled = isProcessing || !(modelReady && imageLoaded);
+      document.getElementById("promptHelperBtn").disabled = isProcessing || !(modelReady && imageLoaded);
+      document.getElementById("clearMaskBtn").disabled = isProcessing || !imageLoaded;
+      document.getElementById("saveBtn").disabled = isProcessing || !imageLoaded;
+      document.getElementById("closeImageBtn").disabled = isProcessing || !imageLoaded;
+      document.getElementById("versionsToggleBtn").disabled = isProcessing || !imageLoaded;
+      document.getElementById("compareToggleBtn").disabled = isProcessing || !(imageLoaded && versions.length >= 2);
+      updateHistoryButtons();
+    }
+
+    document.getElementById("fileInput").addEventListener("change", (e) => {
+      if (isProcessing) return;
+      if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+      e.target.value = "";
+    });
+
+    async function pasteImageFromClipboard() {
+      if (isProcessing) return;
+      if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") {
+        showToast("Collez une image avec Ctrl+V (ou Cmd+V) pour l'importer.", "info");
+        return;
+      }
+
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imageType = item.types.find((type) => type.startsWith("image/"));
+          if (!imageType) continue;
+          const blob = await item.getType(imageType);
+          const extension = imageType.split("/")[1].replace("jpeg", "jpg");
+          handleFile(new File([blob], `image-collee.${extension}`, { type: imageType }));
+          return;
+        }
+        showToast("Aucune image trouvée dans le presse-papiers.", "err");
+      } catch (error) {
+        showToast(`Impossible de lire le presse-papiers : ${error.message}. Collez une image avec Ctrl+V (ou Cmd+V).`, "err");
+      }
+    }
+
+    document.addEventListener("paste", (e) => {
+      if (isProcessing || !e.clipboardData) return;
+      const imageItem = Array.from(e.clipboardData.items).find((item) => item.type.startsWith("image/"));
+      if (!imageItem) return;
+      const imageFile = imageItem.getAsFile();
+      if (!imageFile) return;
+      e.preventDefault();
+      handleFile(imageFile);
+    });
+
+    function closeImage() {
+      if (isProcessing || !imageLoaded) return;
+      imageLoaded = false;
+      drawing = false;
+      compareActive = false;
+      zoomScale = 0;
+      versions = [];
+      activeVersionId = null;
+      nextVersionNum = 1;
+      historyStack.length = 0;
+      redoStack.length = 0;
+      currentFileBaseName = "Lampyre";
+      imgCanvas.width = maskCanvas.width = 0;
+      imgCanvas.height = maskCanvas.height = 0;
+      document.getElementById("compareOverlay").style.display = "none";
+      document.getElementById("compareBar").style.display = "none";
+      document.getElementById("compareToggleBtn").classList.remove("active");
+      maskCanvas.classList.remove("compare-mode");
+      document.getElementById("promptInput").value = "";
+      document.getElementById("workspace").style.display = "none";
+      document.getElementById("zoomBar").style.display = "none";
+      dropBox.style.display = "block";
+      brushCursor.style.display = "none";
+      toggleVersionsPanel(false);
+      renderVersionsPanel();
+      updateActionButtons();
+    }
+
+    const mainArea = document.getElementById("mainArea");
+    const dropBox = document.getElementById("dropBox");
+    mainArea.addEventListener("dragover", (e) => {
+      if (isProcessing) return;
+      e.preventDefault();
+      dropBox.classList.add("dragover");
+    });
+    mainArea.addEventListener("dragleave", () => dropBox.classList.remove("dragover"));
+    mainArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropBox.classList.remove("dragover");
+      if (isProcessing) return;
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      if (isProcessing) return;
+      const base = (file.name || "Lampyre").replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "_");
+      currentFileBaseName = base || "Lampyre";
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          configureBrushSizeForImage(img.width, img.height);
+          imgCanvas.width = maskCanvas.width = img.width;
+          imgCanvas.height = maskCanvas.height = img.height;
+          imgCtx.clearRect(0, 0, img.width, img.height);
+          imgCtx.drawImage(img, 0, 0);
+          maskCtx.clearRect(0, 0, img.width, img.height);
+
+          const origUrl = imgCanvas.toDataURL("image/png");
+          versions = [
+            {
+              id: "v0",
+              label: "Originale",
+              dataUrl: origUrl,
+              prompt: "Image originale",
+              createdAt: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+              durationMs: null,
+              region: null,
+            },
+          ];
+          activeVersionId = "v0";
+          nextVersionNum = 1;
+
+          compareActive = false;
+          document.getElementById("compareOverlay").style.display = "none";
+          document.getElementById("compareBar").style.display = "none";
+          document.getElementById("compareToggleBtn").classList.remove("active");
+          maskCanvas.classList.remove("compare-mode");
+
+          historyStack.length = 0;
+          redoStack.length = 0;
+          imageLoaded = true;
+          zoomScale = 0;
+          applyZoom();
+          pushHistory();
+
+          dropBox.style.display = "none";
+          document.getElementById("workspace").style.display = "flex";
+          document.getElementById("zoomBar").style.display = "flex";
+          renderVersionsPanel();
+          toggleVersionsPanel(true);
+          updateActionButtons();
+          showToast(`Photo chargée (${img.width}×${img.height} px)`, "ok");
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function getCanvasCoords(e) {
+      const rect = maskCanvas.getBoundingClientRect();
+      return {
+        x: ((e.clientX - rect.left) / rect.width) * maskCanvas.width,
+        y: ((e.clientY - rect.top) / rect.height) * maskCanvas.height,
+      };
+    }
+
+    maskCanvas.addEventListener("mouseenter", (e) => {
+      if (!imageLoaded || compareActive || isProcessing) return;
+      updateBrushCursorSize();
+      brushCursor.style.display = "block";
+      brushCursor.style.left = `${e.clientX}px`;
+      brushCursor.style.top = `${e.clientY}px`;
+    });
+
+    maskCanvas.addEventListener("mouseleave", () => {
+      brushCursor.style.display = "none";
+    });
+
+    maskCanvas.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || !imageLoaded || compareActive || isProcessing) return;
+      e.preventDefault();
+      drawing = true;
+      const pt = getCanvasCoords(e);
+      maskCtx.save();
+      maskCtx.globalCompositeOperation = mode === "eraser" ? "destination-out" : "source-over";
+      maskCtx.lineWidth = Number(brushSizeInput.value);
+      maskCtx.lineCap = "round";
+      maskCtx.lineJoin = "round";
+      maskCtx.strokeStyle = "#ff3b30";
+      maskCtx.beginPath();
+      maskCtx.moveTo(pt.x, pt.y);
+      maskCtx.lineTo(pt.x + 0.01, pt.y + 0.01);
+      maskCtx.stroke();
+      maskCtx.restore();
+    });
+
+    maskCanvas.addEventListener("mousemove", (e) => {
+      if (imageLoaded && !compareActive && !isProcessing && !panning) {
+        brushCursor.style.display = "block";
+        brushCursor.style.left = `${e.clientX}px`;
+        brushCursor.style.top = `${e.clientY}px`;
+      }
+      if (!drawing || isProcessing) return;
+      const pt = getCanvasCoords(e);
+      maskCtx.save();
+      maskCtx.globalCompositeOperation = mode === "eraser" ? "destination-out" : "source-over";
+      maskCtx.lineWidth = Number(brushSizeInput.value);
+      maskCtx.lineCap = "round";
+      maskCtx.lineJoin = "round";
+      maskCtx.strokeStyle = "#ff3b30";
+      maskCtx.lineTo(pt.x, pt.y);
+      maskCtx.stroke();
+      maskCtx.beginPath();
+      maskCtx.moveTo(pt.x, pt.y);
+      maskCtx.restore();
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!panning) return;
+      e.preventDefault();
+      workspace.scrollLeft = panStartScrollLeft - (e.clientX - panStartX);
+      workspace.scrollTop = panStartScrollTop - (e.clientY - panStartY);
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (drawing) {
+        drawing = false;
+        maskCtx.beginPath();
+        pushHistory();
+      }
+      if (panning) {
+        panning = false;
+        workspace.classList.remove("panning");
+      }
+    });
+
+    function clearMask() {
+      if (!imageLoaded || isProcessing) return;
+      maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      pushHistory();
+    }
+
+    function exportBinaryMaskDataUrl() {
+      const tmp = document.createElement("canvas");
+      tmp.width = maskCanvas.width;
+      tmp.height = maskCanvas.height;
+      const tCtx = tmp.getContext("2d");
+      tCtx.fillStyle = "#000000";
+      tCtx.fillRect(0, 0, tmp.width, tmp.height);
+
+      const src = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      const dst = tCtx.getImageData(0, 0, tmp.width, tmp.height);
+      for (let i = 0; i < src.data.length; i += 4) {
+        if (src.data[i + 3] > 8) {
+          dst.data[i] = 255;
+          dst.data[i + 1] = 255;
+          dst.data[i + 2] = 255;
+          dst.data[i + 3] = 255;
+        }
+      }
+      tCtx.putImageData(dst, 0, 0);
+      return tmp.toDataURL("image/png");
+    }
+
+    async function runEdit() {
+      if (!modelReady || !imageLoaded || isProcessing) return;
+      if (compareActive) toggleCompare(false);
+
+      const applyBtn = document.getElementById("applyBtn");
+      const promptText = document.getElementById("promptInput").value.trim();
+      applyBtn.textContent = "Traitement...";
+      document.getElementById("procLog").textContent = "Préparation du crop et lancement de l'inférence GPU...";
+      setProcessingState(true, "Retouche IA en cours (FIBO 2.0)...");
+
+      try {
+        const s = readSettingsFromForm();
+        const payload = {
+          image_b64: imgCanvas.toDataURL("image/png"),
+          mask_b64: exportBinaryMaskDataUrl(),
+          prompt: promptText,
+          steps: s.steps,
+          seed: s.seed,
+          settings: s,
+        };
+
+        const res = await fetch("/api/edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Erreur de traitement");
+
+        if (data.telemetry) renderTelemetry(data.telemetry);
+
+        const newId = `v${nextVersionNum}`;
+        const newLabel = `Version ${nextVersionNum}`;
+        nextVersionNum += 1;
+
+        const newVersion = {
+          id: newId,
+          label: newLabel,
+          dataUrl: data.result_b64,
+          prompt: promptText || "Effacement / remplissage IA",
+          createdAt: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+          durationMs: data.telemetry ? data.telemetry.last_inference_ms : null,
+          region: data.telemetry ? data.telemetry.last_edit_region : null,
+        };
+        versions.push(newVersion);
+        activeVersionId = newId;
+
+        await new Promise((resolve) => {
+          const outImg = new Image();
+          outImg.onload = () => {
+            imgCtx.clearRect(0, 0, imgCanvas.width, imgCanvas.height);
+            imgCtx.drawImage(outImg, 0, 0, imgCanvas.width, imgCanvas.height);
+            maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+            pushHistory();
+            resolve();
+          };
+          outImg.onerror = resolve;
+          outImg.src = data.result_b64;
+        });
+
+        renderVersionsPanel();
+        const durTxt = newVersion.durationMs ? ` en ${(newVersion.durationMs / 1000).toFixed(1)} s` : "";
+        showToast(`${newLabel} créée${durTxt} !`, "ok");
+      } catch (err) {
+        showToast("Erreur : " + err.message, "err");
+      } finally {
+        applyBtn.textContent = "Appliquer";
+        serverProcessing = false;
+        setProcessingState(false);
+      }
+    }
+
+    function refreshCompareSource() {
+      const activeVer = getActiveVersion();
+      const refId = document.getElementById("compareRefSelect").value;
+      const refVer = versions.find((v) => v.id === refId) || versions[0];
+      if (!activeVer || !refVer) return;
+      document.getElementById("compareBeforeImg").src = refVer.dataUrl;
+      document.getElementById("compareAfterImg").src = activeVer.dataUrl;
+      updateCompare(document.getElementById("compareSlider").value);
+    }
+
+    function toggleCompare(forceState = null) {
+      if (isProcessing || versions.length < 2) return;
+      compareActive = forceState !== null ? Boolean(forceState) : !compareActive;
+      const overlay = document.getElementById("compareOverlay");
+      const bar = document.getElementById("compareBar");
+      const btn = document.getElementById("compareToggleBtn");
+      btn.classList.toggle("active", compareActive);
+      maskCanvas.classList.toggle("compare-mode", compareActive);
+      if (compareActive) {
+        brushCursor.style.display = "none";
+        syncCompareSelect();
+        refreshCompareSource();
+        overlay.style.display = "block";
+        bar.style.display = "flex";
+      } else {
+        overlay.style.display = "none";
+        bar.style.display = "none";
+      }
+    }
+
+    function updateCompare(val) {
+      const pct = Number(val);
+      document.getElementById("compareAfterWrap").style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+      document.getElementById("compareLine").style.left = `${pct}%`;
+    }
+
+    function buildMaskedCropData(includeMaskOverlay = false) {
+      const w = maskCanvas.width;
+      const h = maskCanvas.height;
+      const src = maskCtx.getImageData(0, 0, w, h).data;
+      let minX = w, minY = h, maxX = -1, maxY = -1;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (src[(y * w + x) * 4 + 3] > 8) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      const c = document.createElement("canvas");
+      if (maxX >= minX && maxY >= minY) {
+        const x0 = minX;
+        const y0 = minY;
+        const cw = Math.max(1, maxX - minX + 1);
+        const ch = Math.max(1, maxY - minY + 1);
+        c.width = cw;
+        c.height = ch;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(imgCanvas, x0, y0, cw, ch, 0, 0, cw, ch);
+        if (includeMaskOverlay) {
+          ctx.globalAlpha = 0.35;
+          ctx.drawImage(maskCanvas, x0, y0, cw, ch, 0, 0, cw, ch);
+        }
+        return { url: c.toDataURL("image/png"), hasMask: true, cw, ch };
+      }
+      c.width = w;
+      c.height = h;
+      c.getContext("2d").drawImage(imgCanvas, 0, 0);
+      return { url: c.toDataURL("image/png"), hasMask: false, cw: w, ch: h };
+    }
+
+    function openPromptHelper() {
+      if (!imageLoaded || !modelReady || isProcessing) return;
+      const preview = buildMaskedCropData(false);
+      document.getElementById("helperPreviewImg").src = preview.url;
+      document.getElementById("helperRegionMeta").textContent = preview.hasMask
+        ? `Crop exact de la zone masquée (${preview.cw}×${preview.ch} px). Seul ce crop sera envoyé au générateur de prompt.`
+        : `Aucune zone masquée : l'extraction analysera l'image entière (${preview.cw}×${preview.ch} px).`;
+
+      const currentPrompt = document.getElementById("promptInput").value.trim();
+      const area = document.getElementById("helperPromptArea");
+      if (currentPrompt && !area.value.trim()) {
+        area.value = currentPrompt;
+      }
+      document.getElementById("promptHelperModal").classList.add("open");
+    }
+
+    function closePromptHelper() {
+      if (isProcessing) return;
+      document.getElementById("promptHelperModal").classList.remove("open");
+    }
+
+    async function extractPromptFromMask() {
+      if (!imageLoaded || !modelReady || isProcessing) return;
+      const lang = document.getElementById("helperLang").value || "fr";
+      const crop = buildMaskedCropData(false);
+      document.getElementById("procLog").textContent = `Analyse du crop (${crop.cw}×${crop.ch} px) par Qwen3-VL...`;
+      setProcessingState(true, "Extraction du prompt de la zone masquée...");
+
+      try {
+        const res = await fetch("/api/describe-region", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_b64: crop.url,
+            mask_b64: "",
+            language: lang,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Échec de l'extraction du prompt.");
+        if (data.telemetry) renderTelemetry(data.telemetry);
+
+        const area = document.getElementById("helperPromptArea");
+        area.value = data.extracted_prompt || "";
+        const durTxt = data.duration_ms ? ` (${(data.duration_ms / 1000).toFixed(1)} s)` : "";
+        showToast(`Prompt extrait${durTxt} — vous pouvez le modifier et le soumettre.`, "ok");
+      } catch (err) {
+        showToast("Erreur extraction : " + err.message, "err");
+      } finally {
+        serverProcessing = false;
+        setProcessingState(false);
+        const area = document.getElementById("helperPromptArea");
+        if (area) area.focus();
+      }
+    }
+
+    function applyPromptTemplate(kind) {
+      if (isProcessing) return;
+      const area = document.getElementById("helperPromptArea");
+      const current = area.value.trim();
+      const lang = document.getElementById("helperLang").value || "fr";
+      if (kind === "replace") {
+        area.value =
+          lang === "en"
+            ? current
+              ? `Replace ${current} with ...`
+              : "Replace the masked object with ..."
+            : current
+            ? `Remplacer « ${current} » par ...`
+            : "Remplacer l'élément masqué par ...";
+      } else if (kind === "remove") {
+        area.value =
+          lang === "en"
+            ? "Remove the masked object cleanly and fill the background naturally."
+            : "Supprimer proprement l'élément dans la zone masquée et reconstruire l'arrière-plan naturellement.";
+      } else if (kind === "color") {
+        area.value =
+          lang === "en"
+            ? current
+              ? `Change the color of ${current} to ...`
+              : "Change the color of the masked object to ..."
+            : current
+            ? `Changer la couleur de « ${current} » en ...`
+            : "Changer la couleur de l'élément masqué en ...";
+      } else if (kind === "lighting") {
+        area.value =
+          lang === "en"
+            ? current
+              ? `Enhance the lighting, sharpness, and realistic texture of ${current}.`
+              : "Enhance lighting, sharpness, and realistic surface texture in the masked area."
+            : current
+            ? `Améliorer l'éclairage, la netteté et la texture réaliste de : ${current}`
+            : "Améliorer l'éclairage, la netteté et les textures réalistes de la zone masquée.";
+      }
+      area.focus();
+    }
+
+    function useHelperPromptOnly() {
+      if (isProcessing) return;
+      const text = document.getElementById("helperPromptArea").value.trim();
+      document.getElementById("promptInput").value = text;
+      closePromptHelper();
+      if (text) showToast("Prompt copié dans la barre d'édition.", "ok");
+    }
+
+    function submitHelperPromptAndEdit() {
+      if (isProcessing) return;
+      const text = document.getElementById("helperPromptArea").value.trim();
+      document.getElementById("promptInput").value = text;
+      document.getElementById("promptHelperModal").classList.remove("open");
+      runEdit();
+    }
+
+    pollStatus();
+  </script>
+</body>
+</html>

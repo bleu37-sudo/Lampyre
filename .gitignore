@@ -1,0 +1,18 @@
+# Environnement portable et données locales (modèles, logs, jeton HF)
+runtime/
+data/
+dist/
+test_install/
+lampyre.zip
+
+# Caches Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Système / IDE
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
