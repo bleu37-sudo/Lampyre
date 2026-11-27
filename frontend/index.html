@@ -907,7 +907,7 @@
       <div class="helper-preview-row">
         <img id="helperPreviewImg" class="helper-preview-img" alt="Aperçu zone" />
         <div class="helper-preview-info">
-          <div id="helperRegionMeta">Extrayez automatiquement la description de la zone coloriée au pinceau grâce à l'IA vision intégrée (Qwen3-VL), puis modifiez le prompt avant de lancer la retouche.</div>
+          <div id="helperRegionMeta">Extrayez automatiquement la description de la zone coloriée au pinceau grâce à l'encodeur vision sélectionné dans les réglages (Qwen3-VL ou Molmo2), puis modifiez le prompt avant de lancer la retouche.</div>
           <div class="helper-extract-row">
             <select id="helperLang" style="padding:6px 8px; font-size:0.8rem;">
               <option value="fr">Français</option>
@@ -1079,6 +1079,15 @@
         <h4>Optimisation VRAM &amp; Crop</h4>
 
         <div class="field-group">
+          <label for="optPromptEncoder">Modèle d'encodage des prompts</label>
+          <select id="optPromptEncoder">
+            <option value="qwen3-vl">Qwen3-VL (intégré au pipeline)</option>
+            <option value="molmo2-4b">Molmo2-4B (AllenAI)</option>
+            <option value="molmo2-8b">Molmo2-8B (AllenAI)</option>
+          </select>
+        </div>
+
+        <div class="field-group">
           <label for="optVramProfile">Profil VRAM</label>
           <select id="optVramProfile">
             <option value="auto">Automatique (détection VRAM)</option>
@@ -1154,6 +1163,9 @@
       />
     </div>
 
+    <button class="secondary" id="referenceCountBtn" type="button" onclick="cycleReferenceCount()" title="Nombre d'images de référence envoyées à Fibo">
+      Références x1
+    </button>
     <button id="applyBtn" onclick="runEdit()" disabled>Appliquer</button>
   </div>
 
@@ -1179,6 +1191,7 @@
     let currentFileBaseName = "Lampyre";
     let zoomScale = 0; // 0 = ajusté à l'écran
     let panning = false;
+    let referenceCount = 1;
     let panStartX = 0;
     let panStartY = 0;
     let panStartScrollLeft = 0;
@@ -1668,6 +1681,7 @@
 
     function applySettingsToForm(s) {
       if (!s) return;
+      document.getElementById("optPromptEncoder").value = s.prompt_encoder || "qwen3-vl";
       document.getElementById("optVramProfile").value = s.vram_profile || "auto";
       document.getElementById("optMaxSide").value = String(s.max_edit_side ?? 0);
       document.getElementById("optCropPadding").value = s.crop_padding ?? 64;
@@ -1681,6 +1695,7 @@
     function readSettingsFromForm() {
       const seedRaw = document.getElementById("optSeed").value.trim();
       return {
+        prompt_encoder: document.getElementById("optPromptEncoder").value,
         vram_profile: document.getElementById("optVramProfile").value,
         max_edit_side: Number(document.getElementById("optMaxSide").value || 0),
         crop_padding: Number(document.getElementById("optCropPadding").value || 64),
@@ -2290,6 +2305,11 @@
       return tmp.toDataURL("image/png");
     }
 
+    function cycleReferenceCount() {
+      referenceCount = referenceCount >= 4 ? 1 : referenceCount + 1;
+      document.getElementById("referenceCountBtn").textContent = `Références x${referenceCount}`;
+    }
+
     async function runEdit() {
       if (!modelReady || !imageLoaded || isProcessing) return;
       if (compareActive) toggleCompare(false);
@@ -2308,6 +2328,7 @@
           prompt: promptText,
           steps: s.steps,
           seed: s.seed,
+          reference_count: referenceCount,
           settings: s,
         };
 
@@ -2461,7 +2482,10 @@
       if (!imageLoaded || !modelReady || isProcessing) return;
       const lang = document.getElementById("helperLang").value || "fr";
       const crop = buildMaskedCropData(false);
-      document.getElementById("procLog").textContent = `Analyse du crop (${crop.cw}×${crop.ch} px) par Qwen3-VL...`;
+      const encoderName = document.getElementById("optPromptEncoder").value.startsWith("molmo2")
+        ? document.getElementById("optPromptEncoder").selectedOptions[0].text
+        : "Qwen3-VL";
+      document.getElementById("procLog").textContent = `Analyse du crop (${crop.cw}×${crop.ch} px) par ${encoderName}...`;
       setProcessingState(true, "Extraction du prompt de la zone masquée...");
 
       try {

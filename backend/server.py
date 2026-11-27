@@ -66,6 +66,7 @@ class EditRequest(BaseModel):
     prompt: str = ""
     steps: int | None = None
     seed: int | None = None
+    reference_count: int = 1
     settings: dict | None = None
 
 
@@ -321,6 +322,7 @@ def edit_image_endpoint(req: EditRequest):
                 prompt=req.prompt,
                 steps=req.steps,
                 seed=req.seed,
+                reference_count=req.reference_count,
                 settings=merged_settings,
             )
             status_state["state"] = "ready"
@@ -366,10 +368,12 @@ def describe_region_endpoint(req: DescribeRequest):
 
         status_state["processing"] = True
         try:
+            cfg = load_config()
             info = engine.describe_masked_region(
                 image=image,
                 mask=mask,
                 language=req.language,
+                settings=cfg.get("settings"),
             )
             status_state["state"] = "ready"
         finally:

@@ -43,6 +43,7 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 
 DEFAULT_SETTINGS = {
     "vram_profile": "auto",
+    "prompt_encoder": "qwen3-vl",
     "max_edit_side": 0,
     "crop_padding": 64,
     "feather_px": 12,
@@ -120,6 +121,9 @@ class FiboTurboEngine:
     def __init__(self, log_callback=None):
         self.log_callback = log_callback
         self.pipe = None
+        self.molmo_model = None
+        self.molmo_processor = None
+        self.molmo_model_id = None
         self._custom_hooks = []
         self.loaded_dtype = None
         self.offload_mode = "none"
@@ -291,6 +295,10 @@ class FiboTurboEngine:
             except Exception:
                 pass
         self._custom_hooks.clear()
+        if getattr(self, "molmo_model", None) is not None:
+            self.molmo_model = None
+            self.molmo_processor = None
+            self.molmo_model_id = None
         if self.pipe is not None:
             self.pipe = None
             self.loaded_dtype = None
@@ -940,6 +948,7 @@ class FiboTurboEngine:
         width: int,
         height: int,
         generator,
+        reference_count: int = 1,
     ) -> Image.Image:
         accepted = self._get_pipe_call_params()
 
@@ -960,7 +969,8 @@ class FiboTurboEngine:
 
         for img_key in ("image", "input_image", "init_image", "source_image"):
             if img_key in accepted:
-                kwargs[img_key] = input_image
+                count = max(1, min(4, int(reference_count)))
+                kwargs[img_key] = [input_image] * count if count > 1 else input_image
                 break
 
         # Ne passer le masque natif que si l'utilisateur a réellement peint une zone.
@@ -1016,6 +1026,7 @@ class FiboTurboEngine:
         prompt: str = "",
         steps: int | None = None,
         seed: int | None = None,
+        reference_count: int = 1,
         settings: dict | None = None,
     ) -> Image.Image:
         t0 = time.perf_counter()
@@ -1137,7 +1148,8 @@ class FiboTurboEngine:
 
             self.emit_log(
                 f"[INFÉRENCE {box_idx + 1}/{len(crop_boxes)}] {region_label} -> {target_w}x{target_h}px | "
-                f"steps={eff_steps} | cfg={eff_cfg} | masque={'oui' if has_mask_pixels else 'non'}"
+                f"steps={eff_steps} | cfg={eff_cfg} | références={max(1, min(4, int(reference_count)))} | "
+                f"masque={'oui' if has_mask_pixels else 'non'}"
             )
             region_summaries.append(f"{region_label} -> {target_w}x{target_h}px")
 
@@ -1150,6 +1162,7 @@ class FiboTurboEngine:
                 width=target_w,
                 height=target_h,
                 generator=generator,
+                reference_count=reference_count,
             )
 
             if has_mask_pixels:
@@ -1179,22 +1192,122 @@ class FiboTurboEngine:
             self.unload_model()
         return final_img
 
+    def _load_molmo_encoder(self, encoder_choice: str):
+        model_id = "allenai/Molmo2-8B" if encoder_choice == "molmo2-8b" else "allenai/Molmo2-4B"
+        if self.molmo_model is not None and self.molmo_model_id == model_id:
+            return self.molmo_processor, self.molmo_model
+
+        if self.molmo_model is not None:
+            self.molmo_model = None
+            self.molmo_processor = None
+            self.molmo_model_id = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        try:
+            from transformers import AutoModelForImageTextToText, AutoProcessor
+        except ImportError as exc:
+            raise RuntimeError(
+                "Transformers ne fournit pas encore les classes Molmo2 nécessaires. "
+                "Installez une version récente de transformers."
+            ) from exc
+
+        token = self.resolve_token()
+        kwargs = {
+            "trust_remote_code": True,
+            "device_map": "auto",
+            "dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
+        }
+        if token:
+            kwargs["token"] = token
+
+        self.emit_log(f"[AIDE PROMPT] Chargement de {model_id}...")
+        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True, token=token)
+        try:
+            model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
+        except TypeError:
+            kwargs.pop("dtype", None)
+            kwargs["torch_dtype"] = torch.float16 if torch.cuda.is_available() else torch.float32
+            model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
+
+        model.eval()
+        self.molmo_processor = processor
+        self.molmo_model = model
+        self.molmo_model_id = model_id
+        return processor, model
+
+    def _describe_with_molmo(
+        self,
+        vis_img: Image.Image,
+        region_label: str,
+        instruction: str,
+        encoder_choice: str,
+        t0: float,
+        max_new_tokens: int,
+    ) -> dict:
+        processor, model = self._load_molmo_encoder(encoder_choice)
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "image", "image": vis_img},
+                {"type": "text", "text": instruction},
+            ],
+        }]
+
+        self.emit_log(
+            f"[AIDE PROMPT] Analyse Molmo2 sur {region_label} "
+            f"({vis_img.width}x{vis_img.height}px)..."
+        )
+        inputs = processor.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            return_dict=True,
+        )
+        target_dev = getattr(model, "device", torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        inputs = {key: value.to(target_dev) for key, value in inputs.items()}
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+        with torch.inference_mode():
+            generated_ids = model.generate(
+                **inputs,
+                max_new_tokens=max(12, min(96, int(max_new_tokens))),
+                do_sample=False,
+            )
+        prompt_length = inputs["input_ids"].size(1)
+        generated_tokens = generated_ids[0, prompt_length:]
+        extracted = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+        if len(extracted) >= 2 and extracted[0] == extracted[-1] and extracted[0] in ('"', "'"):
+            extracted = extracted[1:-1].strip()
+
+        duration_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+        peak_mb = None
+        if torch.cuda.is_available():
+            peak_mb = round(torch.cuda.max_memory_allocated() / (1024 ** 2), 1)
+
+        self.emit_log(f"[AIDE PROMPT OK] Extrait avec Molmo2 en {duration_ms / 1000.0:.1f}s : {extracted}")
+        return {
+            "extracted_prompt": extracted,
+            "region": region_label,
+            "duration_ms": duration_ms,
+            "peak_vram_mb": peak_mb,
+        }
+
     def describe_masked_region(
         self,
         image: Image.Image,
         mask: Image.Image | None = None,
         language: str = "fr",
         max_new_tokens: int = 48,
+        settings: dict | None = None,
     ) -> dict:
-        """Extrait un prompt descriptif uniquement à partir du crop de la zone masquée via Qwen3-VL."""
+        """Extrait un prompt descriptif uniquement à partir du crop de la zone masquée."""
         t0 = time.perf_counter()
         if self.pipe is None:
             self.load_model()
-
-        te = getattr(self.pipe, "text_encoder", None)
-        proc = getattr(self.pipe, "processor", None)
-        if te is None or proc is None:
-            raise RuntimeError("L'encodeur vision-langage (Qwen3-VL) n'est pas disponible dans le pipeline.")
 
         orig_w, orig_h = image.size
         full_rgb = image.convert("RGB")
@@ -1228,6 +1341,22 @@ class FiboTurboEngine:
                 "dans cette zone d'image (apparence, couleur, matière, éclairage), afin que l'utilisateur puisse "
                 "modifier cette description comme prompt de retouche photo. Réponds uniquement par la description."
             )
+
+        encoder_choice = (settings or {}).get("prompt_encoder", "qwen3-vl")
+        if encoder_choice.startswith("molmo2"):
+            return self._describe_with_molmo(
+                vis_img=vis_img,
+                region_label=region_label,
+                instruction=instruction,
+                encoder_choice=encoder_choice,
+                t0=t0,
+                max_new_tokens=max_new_tokens,
+            )
+
+        te = getattr(self.pipe, "text_encoder", None)
+        proc = getattr(self.pipe, "processor", None)
+        if te is None or proc is None:
+            raise RuntimeError("L'encodeur vision-langage (Qwen3-VL) n'est pas disponible dans le pipeline.")
 
         prompt_txt = (
             "<|im_start|>user\n"

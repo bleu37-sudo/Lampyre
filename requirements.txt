@@ -5,6 +5,10 @@ huggingface_hub>=0.28.0
 sentencepiece
 protobuf
 safetensors
+einops
+torchvision
+molmo_utils
+decord2
 fastapi
 uvicorn
 pillow
