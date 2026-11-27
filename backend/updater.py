@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import urllib.request
+import urllib.error
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -78,25 +79,34 @@ class Updater:
             if not latest:
                 raise RuntimeError("Le fichier VERSION distant est vide.")
 
-            api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/releases/latest"
-            with self._urlopen(api_url) as response:
-                release = json.load(response)
-
             download_url = ""
-            for asset in release.get("assets") or []:
-                if asset.get("name") == self.asset_name:
-                    download_url = str(asset.get("browser_download_url") or "")
-                    break
+            release_url = f"{self.repository}/releases"
+            api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/releases/latest"
+            try:
+                with self._urlopen(api_url) as response:
+                    release = json.load(response)
+                for asset in release.get("assets") or []:
+                    if asset.get("name") == self.asset_name:
+                        download_url = str(asset.get("browser_download_url") or "")
+                        break
+                if not download_url:
+                    download_url = str(release.get("zipball_url") or "")
+                release_url = str(release.get("html_url") or release_url)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 404:
+                    raise
+
             if not download_url:
-                download_url = str(release.get("zipball_url") or "")
-            if not download_url:
-                raise RuntimeError("Aucune archive téléchargeable dans la dernière release.")
+                download_url = (
+                    f"https://raw.githubusercontent.com/"
+                    f"{self.owner}/{self.repo}/{self.branch}/{self.asset_name}"
+                )
 
             current = self._normalize_version(self.current_version())
             update_available = latest != current and bool(latest)
             with self.lock:
                 self.latest_version = latest
-                self.release_url = str(release.get("html_url") or f"{self.repository}/releases")
+                self.release_url = release_url
                 self.download_url = download_url
             return self.status_locked(update_available)
         except Exception as exc:
